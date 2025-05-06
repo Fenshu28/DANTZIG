@@ -1,4 +1,89 @@
 <!-- SimplexSolution.vue - Componente para mostrar la solución del método simplex -->
+
+<script setup>
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import SimplexGraph from './SimplexGraph.vue';
+
+// Props
+const props = defineProps({
+  problem: {
+    type: Object,
+    required: true
+  },
+  solution: {
+    type: Object,
+    default: () => ({
+      status: null,
+      variables: [],
+      objectiveValue: 0,
+      slackVariables: [],
+      iterations: []
+    })
+  }
+});
+
+// Referencias
+const graphContainer = ref(null);
+
+// Estado local
+const viewMode = ref('final');
+const currentIteration = ref(0);
+// let chart = null;
+
+// Computed
+const canShowGraph = computed(() => {
+  return props.problem.numVars === 2 && props.solution.status === 'optimal';
+});
+
+// Métodos
+const formatNumber = (value) => {
+  if (value === undefined || value === null) return '-';
+  return Number.isInteger(value) ? value : Number(value).toFixed(2);
+};
+
+const formatVariableName = (index) => {
+  const varChar = props.problem.variableChar || 'x';
+  return `${varChar}${index + 1}`;
+};
+
+const getCurrentIteration = () => {
+  if (!props.solution.iterations || props.solution.iterations.length === 0) {
+    return { tableHeaders: [], tableRows: [], enteringVar: null, leavingVar: null, pivotElement: null, currentZ: 0 };
+  }
+  return props.solution.iterations[currentIteration.value];
+};
+
+// Método para dibujar el gráfico 2D
+const drawGraph = () => {
+  if (!canShowGraph.value || !graphContainer.value) return;
+
+  // Aquí iría la lógica para dibujar el gráfico 2D
+  // Utilizando los datos del problema y la solución
+  // Con una biblioteca como Chart.js, D3, o similar
+
+  // Por ejemplo con Chart.js:
+  // Aquí se dibujaría la región factible y el punto óptimo
+};
+
+// Watches
+watch(() => props.solution, () => {
+  if (props.solution.status === 'optimal') {
+    // Resetear a la primera iteración cuando cambia la solución
+    currentIteration.value = 0;
+
+    // Dibujar el gráfico con la nueva solución
+    nextTick(drawGraph);
+  }
+}, { deep: true });
+
+// Ciclo de vida
+onMounted(() => {
+  if (canShowGraph.value) {
+    drawGraph();
+  }
+});
+</script>
+
 <template>
   <div class="card">
     <div class="card-header bg-info text-white">
@@ -186,90 +271,6 @@
     </div>
   </div>
 </template>
-
-<script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
-import SimplexGraph from './SimplexGraph.vue';
-
-// Props
-const props = defineProps({
-  problem: {
-    type: Object,
-    required: true
-  },
-  solution: {
-    type: Object,
-    default: () => ({
-      status: null,
-      variables: [],
-      objectiveValue: 0,
-      slackVariables: [],
-      iterations: []
-    })
-  }
-});
-
-// Referencias
-const graphContainer = ref(null);
-
-// Estado local
-const viewMode = ref('final');
-const currentIteration = ref(0);
-// let chart = null;
-
-// Computed
-const canShowGraph = computed(() => {
-  return props.problem.numVars === 2 && props.solution.status === 'optimal';
-});
-
-// Métodos
-const formatNumber = (value) => {
-  if (value === undefined || value === null) return '-';
-  return Number.isInteger(value) ? value : Number(value).toFixed(2);
-};
-
-const formatVariableName = (index) => {
-  const varChar = props.problem.variableChar || 'x';
-  return `${varChar}${index + 1}`;
-};
-
-const getCurrentIteration = () => {
-  if (!props.solution.iterations || props.solution.iterations.length === 0) {
-    return { tableHeaders: [], tableRows: [], enteringVar: null, leavingVar: null, pivotElement: null, currentZ: 0 };
-  }
-  return props.solution.iterations[currentIteration.value];
-};
-
-// Método para dibujar el gráfico 2D
-const drawGraph = () => {
-  if (!canShowGraph.value || !graphContainer.value) return;
-
-  // Aquí iría la lógica para dibujar el gráfico 2D
-  // Utilizando los datos del problema y la solución
-  // Con una biblioteca como Chart.js, D3, o similar
-
-  // Por ejemplo con Chart.js:
-  // Aquí se dibujaría la región factible y el punto óptimo
-};
-
-// Watches
-watch(() => props.solution, () => {
-  if (props.solution.status === 'optimal') {
-    // Resetear a la primera iteración cuando cambia la solución
-    currentIteration.value = 0;
-
-    // Dibujar el gráfico con la nueva solución
-    nextTick(drawGraph);
-  }
-}, { deep: true });
-
-// Ciclo de vida
-onMounted(() => {
-  if (canShowGraph.value) {
-    drawGraph();
-  }
-});
-</script>
 
 <style scoped>
 .graph-container {

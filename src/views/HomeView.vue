@@ -3,7 +3,7 @@ import SimplexInterface from '../components/SimplexInterface.vue'
 </script>
 
 <template>
-  <main>
+  <main class="container">
     <SimplexInterface />
   </main>
 </template>

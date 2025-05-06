@@ -1,4 +1,242 @@
 <!-- SimplexInterface.vue (actualizado) - Interfaz mejorada para el método simplex -->
+
+<script setup>
+import { ref, reactive, computed } from 'vue';
+import SimplexSolution from './SimplexSolution.vue';
+import { solveSimplex } from '../services/simplexService';
+
+// Configuración del problema
+const problemConfig = reactive({
+  objective: {
+    type: 'maximize'
+  },
+  variableChar: 'x',
+  method: 'simplex',
+  numVars: 2,
+  numConstraints: 3
+});
+
+// Estado de la interfaz
+const showSolution = ref(false);
+const solutionData = ref({});
+const isProcessing = ref(false);
+
+// Matriz de coeficientes
+const coeffMatrix = reactive({
+  objective: [3, 5],
+  constraints: [
+    { coeffs: [1, 0], operator: '<=', rhs: 4 },
+    { coeffs: [0, 2], operator: '<=', rhs: 12 },
+    { coeffs: [3, 2], operator: '<=', rhs: 18 }
+  ]
+});
+
+// Computed properties
+const isValidProblem = computed(() => {
+  // Verificar que todos los valores son números válidos
+  const hasValidObjective = coeffMatrix.objective.every(val => !isNaN(val));
+
+  const hasValidConstraints = coeffMatrix.constraints.every(constraint => {
+    return constraint.coeffs.every(val => !isNaN(val)) && !isNaN(constraint.rhs);
+  });
+
+  return hasValidObjective && hasValidConstraints;
+});
+
+// Métodos
+const updateProblemDimensions = () => {
+  // Asegurar que los valores son válidos
+  if (problemConfig.numVars < 1) problemConfig.numVars = 1;
+  if (problemConfig.numConstraints < 1) problemConfig.numConstraints = 1;
+
+  // Actualizar la matriz de coeficientes
+  // Función objetivo
+  if (coeffMatrix.objective.length < problemConfig.numVars) {
+    // Agregar nuevos coeficientes
+    const newCoeffs = Array(problemConfig.numVars - coeffMatrix.objective.length).fill(0);
+    coeffMatrix.objective = [...coeffMatrix.objective, ...newCoeffs];
+  } else if (coeffMatrix.objective.length > problemConfig.numVars) {
+    // Reducir coeficientes
+    coeffMatrix.objective = coeffMatrix.objective.slice(0, problemConfig.numVars);
+  }
+
+  // Restricciones
+  if (coeffMatrix.constraints.length < problemConfig.numConstraints) {
+    // Agregar nuevas restricciones
+    const newConstraints = Array(problemConfig.numConstraints - coeffMatrix.constraints.length)
+      .fill()
+      .map(() => ({
+        coeffs: Array(problemConfig.numVars).fill(0),
+        operator: '<=',
+        rhs: 0
+      }));
+
+    coeffMatrix.constraints = [...coeffMatrix.constraints, ...newConstraints];
+  } else if (coeffMatrix.constraints.length > problemConfig.numConstraints) {
+    // Reducir restricciones
+    coeffMatrix.constraints = coeffMatrix.constraints.slice(0, problemConfig.numConstraints);
+  }
+
+  // Actualizar coeficientes de cada restricción
+  coeffMatrix.constraints.forEach(constraint => {
+    if (constraint.coeffs.length < problemConfig.numVars) {
+      // Agregar nuevos coeficientes
+      const newCoeffs = Array(problemConfig.numVars - constraint.coeffs.length).fill(0);
+      constraint.coeffs = [...constraint.coeffs, ...newCoeffs];
+    } else if (constraint.coeffs.length > problemConfig.numVars) {
+      // Reducir coeficientes
+      constraint.coeffs = constraint.coeffs.slice(0, problemConfig.numVars);
+    }
+  });
+};
+
+const resetMatrix = () => {
+  showSolution.value = false;
+  // Reiniciar todos los coeficientes a cero
+  coeffMatrix.objective = Array(problemConfig.numVars).fill(0);
+
+  coeffMatrix.constraints = Array(problemConfig.numConstraints).fill().map(() => ({
+    coeffs: Array(problemConfig.numVars).fill(0),
+    operator: '<=',
+    rhs: 0
+  }));
+};
+
+const generateExample = () => {
+  // Cargar un ejemplo predefinido según el número de variables
+  if (problemConfig.numVars === 2) {
+    // Ejemplo clásico de 2 variables
+    problemConfig.objective.type = 'maximize';
+    coeffMatrix.objective = [3, 5];
+    coeffMatrix.constraints = [
+      { coeffs: [1, 0], operator: '<=', rhs: 4 },
+      { coeffs: [0, 2], operator: '<=', rhs: 12 },
+      { coeffs: [3, 2], operator: '<=', rhs: 18 }
+    ];
+  } else if (problemConfig.numVars === 3) {
+    // Ejemplo con 3 variables
+    problemConfig.objective.type = 'maximize';
+    coeffMatrix.objective = [2, 3, 4];
+    coeffMatrix.constraints = [
+      { coeffs: [3, 2, 1], operator: '<=', rhs: 10 },
+      { coeffs: [2, 5, 3], operator: '<=', rhs: 15 },
+      { coeffs: [1, 0, 2], operator: '<=', rhs: 4 }
+    ];
+  } else {
+    // Ejemplo genérico
+    problemConfig.objective.type = 'maximize';
+
+    // Generar coeficientes aleatorios para la función objetivo
+    coeffMatrix.objective = Array(problemConfig.numVars).fill().map(() =>
+      Math.floor(Math.random() * 10) + 1
+    );
+
+    // Generar restricciones aleatorias
+    coeffMatrix.constraints = Array(problemConfig.numConstraints).fill().map(() => ({
+      coeffs: Array(problemConfig.numVars).fill().map(() =>
+        Math.floor(Math.random() * 5) + 1
+      ),
+      operator: '<=',
+      rhs: Math.floor(Math.random() * 20) + 5
+    }));
+  }
+};
+
+const variableLabel = (index) => {
+  const char = problemConfig.variableChar || 'x';
+  return `${char}${index}`;
+};
+
+const formatObjectiveFunction = () => {
+  const terms = [];
+
+  coeffMatrix.objective.forEach((coeff, index) => {
+    if (coeff !== 0) {
+      const sign = coeff > 0 ? (index === 0 ? '' : '+ ') : '- ';
+      const absCoeff = Math.abs(coeff);
+      const coeffStr = absCoeff === 1 ? '' : `${absCoeff}`;
+
+      terms.push(`${sign}${coeffStr}${variableLabel(index + 1)}`);
+    }
+  });
+
+  return terms.length > 0 ? terms.join(' ') : '0';
+};
+
+const formatConstraint = (constraint) => {
+  const terms = [];
+
+  constraint.coeffs.forEach((coeff, index) => {
+    if (coeff !== 0) {
+      const sign = coeff > 0 ? (terms.length === 0 ? '' : '+ ') : '- ';
+      const absCoeff = Math.abs(coeff);
+      const coeffStr = absCoeff === 1 ? '' : `${absCoeff}`;
+
+      terms.push(`${sign}${coeffStr}${variableLabel(index + 1)}`);
+    }
+  });
+
+  const lhs = terms.length > 0 ? terms.join(' ') : '0';
+  let operator = '≤';
+
+  switch (constraint.operator) {
+    case '<=': operator = '≤'; break;
+    case '=': operator = '='; break;
+    case '>=': operator = '≥'; break;
+  }
+
+  return `${lhs} ${operator} ${constraint.rhs}`;
+};
+
+// Obtener los datos del problema estructurados para YALPS
+const getProblemData = () => {
+  return {
+    type: problemConfig.objective.type,
+    variables: {
+      count: problemConfig.numVars,
+      char: problemConfig.variableChar
+    },
+    objective: coeffMatrix.objective,
+    constraints: coeffMatrix.constraints,
+    method: problemConfig.method,
+    numVars: problemConfig.numVars,
+    numConstraints: problemConfig.numConstraints,
+    variableChar: problemConfig.variableChar
+  };
+};
+
+const solveProblem = async () => {
+  // Mostrar el panel de solución con estado de procesamiento
+  showSolution.value = true;
+  isProcessing.value = true;
+
+  // Estado inicial de la solución (procesando)
+  solutionData.value = {
+    status: 'processing',
+    objective: {
+      type: problemConfig.objective.type
+    }
+  };
+
+  try {
+    // Enviar los datos del problema al servicio Simplex
+    const result = await solveSimplex(getProblemData());
+
+    // Actualizar con la solución
+    solutionData.value = result;
+  } catch (error) {
+    // Manejar errores
+    console.error('Error al resolver el problema:', error);
+    solutionData.value = {
+      status: 'error',
+      errorMessage: error.message || 'Ocurrió un error al procesar la solución.'
+    };
+  } finally {
+    isProcessing.value = false;
+  }
+};
+</script>
+
 <template>
   <div class="container-fluid py-3">
     <div class="row">
@@ -190,242 +428,6 @@
     </div>
   </div>
 </template>
-
-<script setup>
-import { ref, reactive, computed } from 'vue';
-import SimplexSolution from './SimplexSolution.vue';
-import { solveSimplex } from '../services/simplexService';
-
-// Configuración del problema
-const problemConfig = reactive({
-  objective: {
-    type: 'maximize'
-  },
-  variableChar: 'x',
-  method: 'simplex',
-  numVars: 2,
-  numConstraints: 3
-});
-
-// Estado de la interfaz
-const showSolution = ref(false);
-const solutionData = ref({});
-const isProcessing = ref(false);
-
-// Matriz de coeficientes
-const coeffMatrix = reactive({
-  objective: [3, 5],
-  constraints: [
-    { coeffs: [1, 0], operator: '<=', rhs: 4 },
-    { coeffs: [0, 2], operator: '<=', rhs: 12 },
-    { coeffs: [3, 2], operator: '<=', rhs: 18 }
-  ]
-});
-
-// Computed properties
-const isValidProblem = computed(() => {
-  // Verificar que todos los valores son números válidos
-  const hasValidObjective = coeffMatrix.objective.every(val => !isNaN(val));
-
-  const hasValidConstraints = coeffMatrix.constraints.every(constraint => {
-    return constraint.coeffs.every(val => !isNaN(val)) && !isNaN(constraint.rhs);
-  });
-
-  return hasValidObjective && hasValidConstraints;
-});
-
-// Métodos
-const updateProblemDimensions = () => {
-  // Asegurar que los valores son válidos
-  if (problemConfig.numVars < 1) problemConfig.numVars = 1;
-  if (problemConfig.numConstraints < 1) problemConfig.numConstraints = 1;
-
-  // Actualizar la matriz de coeficientes
-  // Función objetivo
-  if (coeffMatrix.objective.length < problemConfig.numVars) {
-    // Agregar nuevos coeficientes
-    const newCoeffs = Array(problemConfig.numVars - coeffMatrix.objective.length).fill(0);
-    coeffMatrix.objective = [...coeffMatrix.objective, ...newCoeffs];
-  } else if (coeffMatrix.objective.length > problemConfig.numVars) {
-    // Reducir coeficientes
-    coeffMatrix.objective = coeffMatrix.objective.slice(0, problemConfig.numVars);
-  }
-
-  // Restricciones
-  if (coeffMatrix.constraints.length < problemConfig.numConstraints) {
-    // Agregar nuevas restricciones
-    const newConstraints = Array(problemConfig.numConstraints - coeffMatrix.constraints.length)
-      .fill()
-      .map(() => ({
-        coeffs: Array(problemConfig.numVars).fill(0),
-        operator: '<=',
-        rhs: 0
-      }));
-
-    coeffMatrix.constraints = [...coeffMatrix.constraints, ...newConstraints];
-  } else if (coeffMatrix.constraints.length > problemConfig.numConstraints) {
-    // Reducir restricciones
-    coeffMatrix.constraints = coeffMatrix.constraints.slice(0, problemConfig.numConstraints);
-  }
-
-  // Actualizar coeficientes de cada restricción
-  coeffMatrix.constraints.forEach(constraint => {
-    if (constraint.coeffs.length < problemConfig.numVars) {
-      // Agregar nuevos coeficientes
-      const newCoeffs = Array(problemConfig.numVars - constraint.coeffs.length).fill(0);
-      constraint.coeffs = [...constraint.coeffs, ...newCoeffs];
-    } else if (constraint.coeffs.length > problemConfig.numVars) {
-      // Reducir coeficientes
-      constraint.coeffs = constraint.coeffs.slice(0, problemConfig.numVars);
-    }
-  });
-};
-
-const resetMatrix = () => {
-  // Reiniciar todos los coeficientes a cero
-  coeffMatrix.objective = Array(problemConfig.numVars).fill(0);
-
-  coeffMatrix.constraints = Array(problemConfig.numConstraints).fill().map(() => ({
-    coeffs: Array(problemConfig.numVars).fill(0),
-    operator: '<=',
-    rhs: 0
-  }));
-};
-
-const generateExample = () => {
-  // Cargar un ejemplo predefinido según el número de variables
-  if (problemConfig.numVars === 2) {
-    // Ejemplo clásico de 2 variables
-    problemConfig.objective.type = 'maximize';
-    coeffMatrix.objective = [3, 5];
-    coeffMatrix.constraints = [
-      { coeffs: [1, 0], operator: '<=', rhs: 4 },
-      { coeffs: [0, 2], operator: '<=', rhs: 12 },
-      { coeffs: [3, 2], operator: '<=', rhs: 18 }
-    ];
-  } else if (problemConfig.numVars === 3) {
-    // Ejemplo con 3 variables
-    problemConfig.objective.type = 'maximize';
-    coeffMatrix.objective = [2, 3, 4];
-    coeffMatrix.constraints = [
-      { coeffs: [3, 2, 1], operator: '<=', rhs: 10 },
-      { coeffs: [2, 5, 3], operator: '<=', rhs: 15 },
-      { coeffs: [1, 0, 2], operator: '<=', rhs: 4 }
-    ];
-  } else {
-    // Ejemplo genérico
-    problemConfig.objective.type = 'maximize';
-
-    // Generar coeficientes aleatorios para la función objetivo
-    coeffMatrix.objective = Array(problemConfig.numVars).fill().map(() =>
-      Math.floor(Math.random() * 10) + 1
-    );
-
-    // Generar restricciones aleatorias
-    coeffMatrix.constraints = Array(problemConfig.numConstraints).fill().map(() => ({
-      coeffs: Array(problemConfig.numVars).fill().map(() =>
-        Math.floor(Math.random() * 5) + 1
-      ),
-      operator: '<=',
-      rhs: Math.floor(Math.random() * 20) + 5
-    }));
-  }
-};
-
-const variableLabel = (index) => {
-  const char = problemConfig.variableChar || 'x';
-  return `${char}${index}`;
-};
-
-const formatObjectiveFunction = () => {
-  const terms = [];
-
-  coeffMatrix.objective.forEach((coeff, index) => {
-    if (coeff !== 0) {
-      const sign = coeff > 0 ? (index === 0 ? '' : '+ ') : '- ';
-      const absCoeff = Math.abs(coeff);
-      const coeffStr = absCoeff === 1 ? '' : `${absCoeff}`;
-
-      terms.push(`${sign}${coeffStr}${variableLabel(index + 1)}`);
-    }
-  });
-
-  return terms.length > 0 ? terms.join(' ') : '0';
-};
-
-const formatConstraint = (constraint) => {
-  const terms = [];
-
-  constraint.coeffs.forEach((coeff, index) => {
-    if (coeff !== 0) {
-      const sign = coeff > 0 ? (terms.length === 0 ? '' : '+ ') : '- ';
-      const absCoeff = Math.abs(coeff);
-      const coeffStr = absCoeff === 1 ? '' : `${absCoeff}`;
-
-      terms.push(`${sign}${coeffStr}${variableLabel(index + 1)}`);
-    }
-  });
-
-  const lhs = terms.length > 0 ? terms.join(' ') : '0';
-  let operator = '≤';
-
-  switch (constraint.operator) {
-    case '<=': operator = '≤'; break;
-    case '=': operator = '='; break;
-    case '>=': operator = '≥'; break;
-  }
-
-  return `${lhs} ${operator} ${constraint.rhs}`;
-};
-
-// Obtener los datos del problema estructurados para YALPS
-const getProblemData = () => {
-  return {
-    type: problemConfig.objective.type,
-    variables: {
-      count: problemConfig.numVars,
-      char: problemConfig.variableChar
-    },
-    objective: coeffMatrix.objective,
-    constraints: coeffMatrix.constraints,
-    method: problemConfig.method,
-    numVars: problemConfig.numVars,
-    numConstraints: problemConfig.numConstraints,
-    variableChar: problemConfig.variableChar
-  };
-};
-
-const solveProblem = async () => {
-  // Mostrar el panel de solución con estado de procesamiento
-  showSolution.value = true;
-  isProcessing.value = true;
-
-  // Estado inicial de la solución (procesando)
-  solutionData.value = {
-    status: 'processing',
-    objective: {
-      type: problemConfig.objective.type
-    }
-  };
-
-  try {
-    // Enviar los datos del problema al servicio Simplex
-    const result = await solveSimplex(getProblemData());
-
-    // Actualizar con la solución
-    solutionData.value = result;
-  } catch (error) {
-    // Manejar errores
-    console.error('Error al resolver el problema:', error);
-    solutionData.value = {
-      status: 'error',
-      errorMessage: error.message || 'Ocurrió un error al procesar la solución.'
-    };
-  } finally {
-    isProcessing.value = false;
-  }
-};
-</script>
 
 <style scoped>
 /* Transiciones para elementos que aparecen/desaparecen */

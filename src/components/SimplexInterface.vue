@@ -337,17 +337,6 @@ const solveProblem = async () => {
                   </tr>
                 </thead>
                 <tbody>
-                  <!-- Fila para la función objetivo -->
-                  <tr>
-                    <th scope="row" class="text-center align-middle">Z</th>
-                    <td v-for="j in problemConfig.numVars" :key="`obj-${j}`">
-                      <input type="number" class="form-control" v-model.number="coeffMatrix.objective[j - 1]"
-                        step="0.1" />
-                    </td>
-                    <td class="text-center align-middle">-</td>
-                    <td class="text-center align-middle">-</td>
-                  </tr>
-
                   <!-- Filas para las restricciones -->
                   <tr v-for="i in problemConfig.numConstraints" :key="`constraint-${i}`">
                     <th scope="row" class="text-center align-middle">Restricción {{ i }}</th>
@@ -366,6 +355,16 @@ const solveProblem = async () => {
                       <input type="number" class="form-control" v-model.number="coeffMatrix.constraints[i - 1].rhs"
                         step="0.1" />
                     </td>
+                  </tr>
+                  <!-- Fila para la función objetivo -->
+                  <tr>
+                    <th scope="row" class="text-center align-middle">Z</th>
+                    <td v-for="j in problemConfig.numVars" :key="`obj-${j}`">
+                      <input type="number" class="form-control" v-model.number="coeffMatrix.objective[j - 1]"
+                        step="0.1" />
+                    </td>
+                    <td class="text-center align-middle">-</td>
+                    <td class="text-center align-middle">-</td>
                   </tr>
                 </tbody>
               </table>

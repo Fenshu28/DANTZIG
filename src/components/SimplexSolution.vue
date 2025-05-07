@@ -1,8 +1,9 @@
-<!-- SimplexSolution.vue - Componente para mostrar la solución del método simplex -->
+<!-- SimplexSolution.vue - Componente para mostrar la solución del método simplex con soporte para fracciones -->
 
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import SimplexGraph from './SimplexGraph.vue';
+import { toFractionString } from '../services/fractionService';
 
 // Props
 const props = defineProps({
@@ -28,16 +29,26 @@ const graphContainer = ref(null);
 // Estado local
 const viewMode = ref('final');
 const currentIteration = ref(0);
-// let chart = null;
 
 // Computed
 const canShowGraph = computed(() => {
   return props.problem.numVars === 2 && props.solution.status === 'optimal';
 });
 
+const shouldDisplayAsFraction = computed(() => {
+  return props.problem.displayAsFraction === undefined ? true : props.problem.displayAsFraction;
+});
+
 // Métodos
 const formatNumber = (value) => {
   if (value === undefined || value === null) return '-';
+
+  // Si se debe mostrar como fracción, usar el servicio de fracciones
+  if (shouldDisplayAsFraction.value) {
+    return toFractionString(value);
+  }
+
+  // De lo contrario, mostrar como decimal
   return Number.isInteger(value) ? value : Number(value).toFixed(2);
 };
 
@@ -93,8 +104,8 @@ onMounted(() => {
       <!-- Selector de modo de visualización -->
       <div class="mb-4">
         <div class="btn-group w-100" role="group">
-          <input type="radio" class="btn-check" name="viewMode" id="viewFinal" autocomplete="off"
-            v-model="viewMode" value="final" checked>
+          <input type="radio" class="btn-check" name="viewMode" id="viewFinal" autocomplete="off" v-model="viewMode"
+            value="final" checked>
           <label class="btn btn-outline-primary" for="viewFinal">
             <iconify-icon icon="mdi:flag-checkered" class="me-1"></iconify-icon>
             Solución Final
@@ -191,10 +202,7 @@ onMounted(() => {
           <div class="card mb-3">
             <div class="card-body">
               <div class="d-flex justify-content-center">
-                <SimplexGraph
-                  :problem="problem"
-                  :solution="solution"
-                />
+                <SimplexGraph :problem="problem" :solution="solution" />
               </div>
             </div>
           </div>
@@ -205,20 +213,19 @@ onMounted(() => {
       <div v-if="viewMode === 'iterations'" class="mt-4">
         <!-- Controles de iteración -->
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <button class="btn btn-sm btn-outline-secondary"
-            :disabled="currentIteration <= 0"
+          <button class="btn btn-sm btn-outline-secondary" :disabled="currentIteration <= 0"
             @click="currentIteration--">
             <iconify-icon icon="mdi:arrow-left" class="me-1"></iconify-icon>
             Anterior
           </button>
 
           <div class="px-3">
-            <span class="badge bg-primary">Iteración {{ currentIteration + 1 }} de {{ solution.iterations?.length || 0 }}</span>
+            <span class="badge bg-primary">Iteración {{ currentIteration + 1 }} de {{ solution.iterations?.length || 0
+              }}</span>
           </div>
 
           <button class="btn btn-sm btn-outline-secondary"
-            :disabled="currentIteration >= (solution.iterations?.length - 1)"
-            @click="currentIteration++">
+            :disabled="currentIteration >= (solution.iterations?.length - 1)" @click="currentIteration++">
             Siguiente
             <iconify-icon icon="mdi:arrow-right" class="ms-1"></iconify-icon>
           </button>
@@ -231,24 +238,20 @@ onMounted(() => {
             <thead class="table-light">
               <tr>
                 <th class="text-center">Base</th>
-                <th v-for="(header, index) in getCurrentIteration().tableHeaders"
-                    :key="index"
-                    class="text-center"
-                    :class="{'table-primary': header === 'RHS'}">
+                <th v-for="(header, index) in getCurrentIteration().tableHeaders.slice(1, -1)" :key="index"
+                  class="text-center">
                   {{ header }}
                 </th>
+                <th class="text-center table-primary">RHS</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(row, rowIndex) in getCurrentIteration().tableRows" :key="rowIndex">
                 <th class="text-center table-light">{{ row.base }}</th>
-                <td v-for="(cell, cellIndex) in row.cells"
-                    :key="cellIndex"
-                    class="text-center"
-                    :class="{
-                      'table-primary': cellIndex === row.cells.length - 1,
-                      'table-warning': cell.isPivot
-                    }">
+                <td v-for="(cell, cellIndex) in row.cells" :key="cellIndex" class="text-center" :class="{
+                  'table-primary': cellIndex === row.cells.length - 1,
+                  'table-warning': cell.isPivot
+                }">
                   {{ formatNumber(cell.value) }}
                 </td>
               </tr>
@@ -262,7 +265,8 @@ onMounted(() => {
                 <p><strong>Variable entrante:</strong> {{ getCurrentIteration().enteringVar || 'Ninguna' }}</p>
                 <p><strong>Variable saliente:</strong> {{ getCurrentIteration().leavingVar || 'Ninguna' }}</p>
                 <p><strong>Elemento pivote:</strong> {{ formatNumber(getCurrentIteration().pivotElement) }}</p>
-                <p class="mb-0"><strong>Valor actual de Z:</strong> {{ formatNumber(getCurrentIteration().currentZ) }}</p>
+                <p class="mb-0"><strong>Valor actual de Z:</strong> {{ formatNumber(getCurrentIteration().currentZ) }}
+                </p>
               </div>
             </div>
           </div>
@@ -287,7 +291,8 @@ onMounted(() => {
 }
 
 /* Tabla simplex más compacta */
-.table-sm td, .table-sm th {
+.table-sm td,
+.table-sm th {
   padding: 0.5rem;
 }
 </style>
